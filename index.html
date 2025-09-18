@@ -1,115 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Live Sensor Data Trend</title>
-  <style>
-    body { font-family: sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-    .chart-container { width: 90%; max-width: 1000px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 8px rgba(0,0,0,0.1); }
-    .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: center; }
-    .controls button, .controls select, .controls input { padding: 8px 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
-    .controls button.active { background-color: #4CAF50; color: white; border-color: #4CAF50; }
-    #tag-toggles label { margin-right: 15px; }
-  </style>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Tag Live Data Trend Graph</title>
+    
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; padding: 20px 0; margin: 0; background-color: #f4f4f9; }
+        .chart-container { width: 80%; max-width: 900px; padding: 20px; background-color: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .controls { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 900px; }
+        .controls button, .controls select, .controls input { padding: 10px 15px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; background-color: #fff; cursor: pointer; }
+        .controls button.active { background-color: #4CAF50; color: white; border-color: #4CAF50; }
+        #tag-toggles { border-top: 1px solid #eee; padding-top: 10px; width: 100%; }
+        #tag-toggles label { margin-right: 15px; cursor: pointer; user-select: none; }
+    </style>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body>
-  <div class="controls">
-    <select id="yearFilter"><option value="all">All Years</option></select>
-    <select id="monthFilter"><option value="all">All Months</option></select>
-    <button id="btn1min" class="active">1 Minute</button>
-    <button id="btn5min">5 Minutes</button>
-    <button id="btn10min">10 Minutes</button>
-  </div>
-  <div class="controls">
-    <label>From: <input type="time" id="startTimeFilter"/></label>
-    <label>To: <input type="time" id="endTimeFilter"/></label>
-    <button id="applyTimeFilter">Apply Time</button>
-    <button id="clearTimeFilter">Clear</button>
-  </div>
-  <div class="controls" id="tag-toggles"></div>
-  <div class="chart-container">
-    <canvas id="myChart"></canvas>
-  </div>
+    <div class="controls">
+        <select id="yearFilter"><option value="all">All Years</option></select>
+        <select id="monthFilter">
+            <option value="all">All Months</option>
+            <option value="0">January</option><option value="1">February</option><option value="2">March</option><option value="3">April</option><option value="4">May</option><option value="5">June</option><option value="6">July</option><option value="7">August</option><option value="8">September</option><option value="9">October</option><option value="10">November</option><option value="11">December</option>
+        </select>
+        <button id="btn1min" class="active">1 Minute</button>
+        <button id="btn5min">5 Minutes</button>
+        <button id="btn10min">10 Minutes</button>
+    </div>
+    <div class="controls">
+        <label for="startTimeFilter">From:</label>
+        <input type="time" id="startTimeFilter">
+        <label for="endTimeFilter">To:</label>
+        <input type="time" id="endTimeFilter">
+        <button id="applyTimeFilter">Apply Time</button>
+        <button id="clearTimeFilter">Clear</button>
+    </div>
+    <div class="controls" id="tag-toggles"></div>
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
 
-  <script>
-    const webAppUrl = 'https://script.google.com/macros/s/AKfycbxqqY_fZ8zD73AvWorAADPHtC2ly5XT1TVN47rvsqOWo5BsR5J5RIkrNxeoTiCGFMYqfA/exec';
+    <script>
+        const webAppUrl = 'https://script.google.com/macros/s/AKfycbxqqY_fZ8zD73AvWorAADPHtC2ly5XT1TVN47rvsqOWo5BsR5J5RIkrNxeoTiCGFMYqfA/exec';
+        const chartCanvas = document.getElementById('myChart');
+        // ... (other declarations are the same)
+        
+        async function fetchData() {
+            try {
+                const response = await fetch(`${webAppUrl}?v=${new Date().getTime()}`);
+                const dataArray = await response.json();
+                
+                rawData = dataArray.map(row => {
+                    return { x: new Date(row[0]), id: row[1].trim(), y: parseFloat(row[2]) };
+                }).filter(point => point.id && !isNaN(point.x.getTime()) && !isNaN(point.y));
+                
+                rawData.sort((a, b) => a.x - b.x);
+                
+                // --- NEW DEBUGGING MESSAGE ---
+                console.log("This is the ACTUAL data the script is using:", rawData);
 
-    const yearFilter = document.getElementById('yearFilter');
-    const monthFilter = document.getElementById('monthFilter');
-    const tagTogglesContainer = document.getElementById('tag-toggles');
-    const startTimeFilter = document.getElementById('startTimeFilter');
-    const endTimeFilter = document.getElementById('endTimeFilter');
-    const applyTimeFilterBtn = document.getElementById('applyTimeFilter');
-    const clearTimeFilterBtn = document.getElementById('clearTimeFilter');
-    const chartCanvas = document.getElementById('myChart');
-
-    let rawData = [];
-    let myChart;
-    let currentInterval = 1;
-    const chartColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-
-    async function fetchData() {
-      try {
-        const response = await fetch(`${webAppUrl}?v=${Date.now()}`);
-        const data = await response.json();
-        rawData = data.map(row => ({
-          x: new Date(row[0].replace(' ', 'T')),
-          id: row[1].trim(),
-          y: parseFloat(row[2])
-        })).filter(d => !isNaN(d.x) && !isNaN(d.y) && d.id);
-
-        rawData.sort((a, b) => a.x - b.x);
-        populateYearFilter();
-        createTagToggles();
-      } catch (err) {
-        console.error('Data Fetch Error:', err);
-      }
-    }
-
-    function processData(data, interval) {
-      if (interval === 1) return data;
-      const buckets = new Map();
-      data.forEach(point => {
-        const bucketTime = Math.floor(point.x.getTime() / (interval * 60000)) * (interval * 60000);
-        if (!buckets.has(bucketTime)) {
-          buckets.set(bucketTime, point); // Simple down-sample
+                populateYearFilter();
+                createTagToggles();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
         }
-      });
-      return [...buckets.values()];
-    }
+        
+        // ... (The rest of the script is identical to the last version) ...
 
-    function populateYearFilter() {
-      const years = [...new Set(rawData.map(p => p.x.getFullYear()))];
-      yearFilter.innerHTML = '<option value="all">All Years</option>';
-      years.forEach(y => {
-        const opt = document.createElement('option');
-        opt.value = y;
-        opt.textContent = y;
-        yearFilter.appendChild(opt);
-      });
-    }
-
-    function createTagToggles() {
-      const ids = [...new Set(rawData.map(p => p.id))];
-      tagTogglesContainer.innerHTML = '';
-      ids.forEach((id, i) => {
-        const input = document.createElement('input');
-        input.type = 'checkbox';
-        input.id = 'tag-' + i;
-        input.value = id;
-        input.checked = true;
-        input.addEventListener('change', renderChart);
-
-        const label = document.createElement('label');
-        label.htmlFor = input.id;
-        label.textContent = id;
-
-        tagTogglesContainer.appendChild(input);
-        tagTogglesContainer.appendChild(label);
-      });
-    }
-
-   
+        const yearFilter = document.getElementById('yearFilter');
+        const monthFilter = document.getElementById('monthFilter');
+        const tagTogglesContainer = document.getElementById('tag-toggles');
+        const startTimeFilter = document.getElementById('startTimeFilter');
+        const endTimeFilter = document.getElementById('endTimeFilter');
+        const applyTimeFilterBtn = document.getElementById('applyTimeFilter');
+        const clearTimeFilterBtn = document.getElementById('clearTimeFilter');
+        let myChart;
+        let rawData = [];
+        let currentInterval = 1;
+        let yearsPopulated = false;
+        const chartColors = ['rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 206, 86, 1)', 'rgba(75, 192, 192, 1)', 'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)'];
+        function processData(dataToProcess, interval) { if (interval === 1) { return [...dataToProcess]; } const buckets = new Map(); dataToProcess.forEach(point => { const timestamp = point.x.getTime(); const bucketTimestamp = Math.floor(timestamp / (interval * 60 * 1000)) * (interval * 60 * 1000); if (!buckets.has(bucketTimestamp)) { buckets.set(bucketTimestamp, point); } }); return Array.from(buckets.values()); }
+        function populateYearFilter() { if (yearsPopulated || rawData.length === 0) return; const years = [...new Set(rawData.map(p => p.x.getFullYear()))]; yearFilter.innerHTML = '<option value="all">All Years</option>'; years.sort().forEach(year => { const option = document.createElement('option'); option.value = year; option.textContent = year; yearFilter.appendChild(option); }); yearsPopulated = true; }
+        function createTagToggles() { if (rawData.length === 0) return; const uniqueIds = [...new Set(rawData.map(p => p.id))]; uniqueIds.forEach(id => { const sanitizedId = `toggle-${id.replace(/\\/g, '-')}`; if (!document.getElementById(sanitizedId)) { const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = sanitizedId; checkbox.value = id; checkbox.checked = true; checkbox.addEventListener('change', renderChart); const label = document.createElement('label'); label.htmlFor = sanitizedId; label.textContent = id; tagTogglesContainer.appendChild(checkbox); tagTogglesContainer.appendChild(label); } }); }
+        function renderChart() { const selectedYear = yearFilter.value; const selectedMonth = monthFilter.value; const activeTags = Array.from(tagTogglesContainer.querySelectorAll('input:checked')).map(cb => cb.value); const startTime = startTimeFilter.value; const endTime = endTimeFilter.value; let filteredData = rawData.filter(point => { const yearMatch = (selectedYear === 'all' || point.x.getFullYear() == selectedYear); const monthMatch = (selectedMonth === 'all' || point.x.getMonth() == selectedMonth); const tagMatch = activeTags.includes(point.id); let timeMatch = true; if (startTime || endTime) { const pointTime = point.x.toTimeString().slice(0, 5); const startMatch = (startTime === '' || pointTime >= startTime); const endMatch = (endTime === '' || pointTime <= endTime); timeMatch = startMatch && endMatch; } return yearMatch && monthMatch && tagMatch && timeMatch; }); const datasets = activeTags.map((id, index) => { const tagData = filteredData.filter(point => point.id === id); const processedTagData = processData(tagData, currentInterval); const color = chartColors[index % chartColors.length]; return { label: `${id} (${currentInterval}m Interval)`, data: processedTagData, borderColor: color, backgroundColor: color.replace('1)', '0.2)'), fill: true, tension: 0.1, spanGaps: true }; }); if (!myChart) { const ctx = chartCanvas.getContext('2d'); myChart = new Chart(ctx, { type: 'line', data: { datasets }, options: { responsive: true, plugins: { title: { display: true, text: 'Live Sensor Data Trend' }, tooltip: { enabled: true, mode: 'index', intersect: false } }, scales: { x: { type: 'time', title: { display: true, text: 'Timestamp' } }, y: { beginAtZero: false, title: { display: true, text: 'Value' } } } } }); } else { myChart.data.datasets = datasets; myChart.update(); } }
+        async function refreshData() { await fetchData(); renderChart(); }
+        document.querySelectorAll('.controls button[id^="btn"]').forEach(button => { button.addEventListener('click', (e) => { currentInterval = parseInt(e.target.id.replace('btn', '').replace('min', '')); document.querySelector('.controls button.active').classList.remove('active'); e.target.classList.add('active'); renderChart(); }); });
+        yearFilter.addEventListener('change', renderChart);
+        monthFilter.addEventListener('change', renderChart);
+        applyTimeFilterBtn.addEventListener('click', renderChart);
+        clearTimeFilterBtn.addEventListener('click', () => { startTimeFilter.value = ''; endTimeFilter.value = ''; renderChart(); });
+        refreshData();
+        setInterval(refreshData, 60000);
+    </script>
+</body>
+</html>
